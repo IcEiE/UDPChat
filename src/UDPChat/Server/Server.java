@@ -89,20 +89,74 @@ public class Server {
 
 	private void executeMessage(DatagramPacket p) {
 		String message = new String(p.getData());
-		String arr[] = message.split(" ", 2);
+		String arr[] = message.split("\\s+");
 		String type = arr[1].trim();
+		String clientWhoSent = arr[0].trim();
+
 		switch (type) {
 		case "/connect":
-			if (addClient(arr[0], p.getAddress(), p.getPort())) {
-				sendPrivateMessage("You are now connected!", arr[0]);
+			if (addClient(clientWhoSent, p.getAddress(), p.getPort())) {
+				broadcast(clientWhoSent + " has connected!");
 			}
 			break;
-			
+		case "/dc":
+			if (removeClientFromServer(clientWhoSent)) {
+				broadcast(clientWhoSent + " has disconnected from the server!");
+			}
+			break;
 		case "/tell":
+			String clientToSend = arr[2].trim();
+			message = trimMessageToSend(message, 3, clientWhoSent, clientToSend);
+			if (clientIsConnected(clientWhoSent) && clientIsConnected(clientToSend)) {
+				sendPrivateMessage(message, arr[0]);
+				sendPrivateMessage(message, arr[2]);
+			}
 			break;
 		case "/all":
+			if (clientIsConnected(clientWhoSent)) {
+				message = trimMessageToSend(message, 2, clientWhoSent, "all");
+				broadcast(message);
+			}
 			break;
+		case "/list":
+			if (clientIsConnected(clientWhoSent)) {
+				String newMessage = "Connected Clients: ";
+				for (ClientConnection cc : m_connectedClients) {
+					newMessage += cc.getName() + ", ";
+				}
+				sendPrivateMessage(newMessage, clientWhoSent);
+			}
 		}
+	}
+
+	private boolean removeClientFromServer(String name) {
+		for (ClientConnection cc : m_connectedClients) {
+			if (name.equals(cc.getName())) {
+				m_connectedClients.remove(m_connectedClients.indexOf(cc));
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private String trimMessageToSend(String message, int indexStart, String sender, String receiver) {
+		String arr[] = message.split("\\s+");
+		String newMessage = sender + " to " + receiver + ": ";
+		for (int i = indexStart; i < arr.length; ++i) {
+			newMessage += arr[i] + " ";
+		}
+		return newMessage;
+	}
+
+	private boolean clientIsConnected(String name) {
+		ClientConnection c;
+		for (Iterator<ClientConnection> itr = m_connectedClients.iterator(); itr.hasNext();) {
+			c = itr.next();
+			if (c.hasName(name)) {
+				return true; // client exists in the server
+			}
+		}
+		return false;
 	}
 
 	public boolean addClient(String name, InetAddress address, int port) {
