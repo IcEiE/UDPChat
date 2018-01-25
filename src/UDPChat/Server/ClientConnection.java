@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Random;
 
 /**
@@ -57,5 +58,10 @@ public class ClientConnection {
 	public boolean hasName(String testName) {
 		return testName.equals(m_name);
 	}
+	
+	public String getName(){
+		return m_name;
+	}
+	
 
 }
