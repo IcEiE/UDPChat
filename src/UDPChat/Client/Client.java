@@ -57,12 +57,7 @@ public class Client implements ActionListener {
 		// Since the only possible event is a carriage return in the text input
 		// field,
 		// the text in the chat input field can now be sent to the server.'
-		String writtenMessage = m_GUI.getInput();
-		if (writtenMessage.trim().equals("/connect")) {
-			m_connection.handshake(m_name);
-		} else {
-			m_connection.sendChatMessage(m_name, writtenMessage);
-			m_GUI.clearInput();
-		}
+		m_connection.sendChatMessage(m_name, m_GUI.getInput());
+		m_GUI.clearInput();
 	}
 }

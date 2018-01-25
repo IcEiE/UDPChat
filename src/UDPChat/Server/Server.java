@@ -1,5 +1,6 @@
 package UDPChat.Server;
 
+import java.awt.List;
 import java.io.IOException;
 
 //
@@ -12,12 +13,15 @@ import java.io.IOException;
 import java.net.*;
 //import java.io.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 
 public class Server {
 
 	private ArrayList<ClientConnection> m_connectedClients = new ArrayList<ClientConnection>();
 	private DatagramSocket m_socket;
+	private Map<String, ArrayList<Integer>> m_receivedPackets = new HashMap<>();
 
 	public static void main(String[] args) {
 		controlSizeOfInputString(args);
@@ -60,18 +64,15 @@ public class Server {
 
 	private void listenForClientMessages() {
 		System.out.println("Waiting for client messages... ");
-		int numbOfMessenges = 0;
 		do {
 			DatagramPacket msgPacket = getPacketMessage(m_socket);
 			executeMessage(msgPacket);
-			++numbOfMessenges;
-			System.out.println("Finished Messages: " + numbOfMessenges);
-
 		} while (true);
 	}
 
 	private DatagramPacket getPacketMessage(DatagramSocket socket) {
 		DatagramPacket incoming = getDatagramToReceive();
+
 		try {
 			socket.receive(incoming);
 		} catch (IOException e) {
@@ -90,49 +91,71 @@ public class Server {
 	private void executeMessage(DatagramPacket p) {
 		String message = new String(p.getData());
 		String arr[] = message.split("\\s+");
-		String type = arr[1].trim();
 		String clientWhoSent = arr[0].trim();
+		int packetID = Integer.parseInt(arr[1].trim());
+		String type = arr[2].trim();
 
-		switch (type) {
-		case "/connect":
-			if (addClient(clientWhoSent, p.getAddress(), p.getPort())) {
-				broadcast(clientWhoSent + " has connected!");
-			}
-			break;
-		case "/dc":
-			if (removeClientFromServer(clientWhoSent)) {
-				broadcast(clientWhoSent + " has disconnected from the server!");
-			}
-			break;
-		case "/tell":
-			String clientToSend = arr[2].trim();
-			message = trimMessageToSend(message, 3, clientWhoSent, clientToSend);
-			if (clientIsConnected(clientWhoSent) && clientIsConnected(clientToSend)) {
-				sendPrivateMessage(message, arr[0]);
-				sendPrivateMessage(message, arr[2]);
-			}
-			break;
-		case "/all":
-			if (clientIsConnected(clientWhoSent)) {
-				message = trimMessageToSend(message, 2, clientWhoSent, "all");
-				broadcast(message);
-			}
-			break;
-		case "/list":
-			if (clientIsConnected(clientWhoSent)) {
-				String newMessage = "Connected Clients: ";
-				for (ClientConnection cc : m_connectedClients) {
-					newMessage += cc.getName() + ", ";
+		if (!messageAlreadyReceived(clientWhoSent, packetID)) {
+			switch (type) {
+			case "/connect":
+				if (addClient(clientWhoSent, p.getAddress(), p.getPort())) {
+					broadcast(clientWhoSent + " has connected!");
 				}
-				sendPrivateMessage(newMessage, clientWhoSent);
+				break;
+			case "/dc":
+				if (removeClientFromServer(clientWhoSent)) {
+					broadcast(clientWhoSent + " has disconnected from the server!");
+				}
+				break;
+			case "/tell":
+				String clientToSend = arr[2].trim();
+				message = trimMessageToSend(message, 3, clientWhoSent, clientToSend);
+				if (clientIsConnected(clientWhoSent) && clientIsConnected(clientToSend)) {
+					sendPrivateMessage(message, arr[0]);
+					sendPrivateMessage(message, arr[2]);
+				}
+				break;
+			case "/all":
+				if (clientIsConnected(clientWhoSent)) {
+					message = trimMessageToSend(message, 2, clientWhoSent, "all");
+					broadcast(message);
+				}
+				break;
+			case "/list":
+				if (clientIsConnected(clientWhoSent)) {
+					String newMessage = "Connected Clients: ";
+					for (ClientConnection cc : m_connectedClients) {
+						newMessage += cc.getName() + ", ";
+					}
+					sendPrivateMessage(newMessage, clientWhoSent);
+				}
 			}
+			markPacketAsReceived(clientWhoSent, packetID);
 		}
+	}
+
+	private void markPacketAsReceived(String name, int packetID) {
+		if(m_receivedPackets.containsKey(name)) {
+			m_receivedPackets.get(name).add(packetID);
+		}
+		else {
+			m_receivedPackets.put(name, new ArrayList<>());
+			m_receivedPackets.get(name).add(packetID);
+		}
+	}
+	
+	private boolean messageAlreadyReceived(String name, int packetID) {
+		if (m_receivedPackets.containsKey(name) && m_receivedPackets.get(name).contains(packetID)) {
+			return true;
+		}
+		return false;
 	}
 
 	private boolean removeClientFromServer(String name) {
 		for (ClientConnection cc : m_connectedClients) {
 			if (name.equals(cc.getName())) {
 				m_connectedClients.remove(m_connectedClients.indexOf(cc));
+				m_receivedPackets.remove(name);
 				return true;
 			}
 		}
@@ -168,6 +191,7 @@ public class Server {
 			}
 		}
 		m_connectedClients.add(new ClientConnection(name, address, port));
+		m_receivedPackets.put(name, new ArrayList<>());
 		return true;
 	}
 

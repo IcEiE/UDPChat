@@ -24,6 +24,7 @@ public class ServerConnection {
 	private DatagramSocket m_socket = null;
 	private InetAddress m_serverAddress = null;
 	private int m_serverPort = -1;
+	int messageID = 0;
 
 	public ServerConnection(String hostName, int port) {
 		m_serverPort = port;
@@ -56,7 +57,7 @@ public class ServerConnection {
 	public boolean handshake(String name) {
 		String message = "/connect";
 		sendChatMessage(name, message);
-		System.out.println(receiveChatMessage());
+		receiveChatMessage();
 		return true;
 	}
 
@@ -72,19 +73,20 @@ public class ServerConnection {
 	}
 
 	public void sendChatMessage(String name, String message) {
-		Random generator = new Random();
-		double failure = generator.nextDouble();
-		String compMessage = name + " " + message;
-		if (failure > TRANSMISSION_FAILURE_RATE) {
-			try {
-				m_socket.send(getDatagramToSend(compMessage));
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+		String compMessage = name + " " + messageID + " " + message;
+		for (int i = 0; i < 10; ++i) {
+			Random generator = new Random();
+			double failure = generator.nextDouble();
+			if (failure > TRANSMISSION_FAILURE_RATE) {
+				try {
+					m_socket.send(getDatagramToSend(compMessage));
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
 			}
-		} else {
-			// Message got lost
 		}
+		++messageID;
 	}
 
 	private DatagramPacket getDatagramToSend(String message) {

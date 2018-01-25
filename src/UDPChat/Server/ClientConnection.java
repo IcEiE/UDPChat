@@ -16,10 +16,9 @@ import java.util.Random;
  * @author brom
  */
 public class ClientConnection {
-	
-	static double TRANSMISSION_FAILURE_RATE = 0
-			;
-	
+
+	static double TRANSMISSION_FAILURE_RATE = 0;
+
 	private final String m_name;
 	private final InetAddress m_address;
 	private final int m_port;
@@ -31,37 +30,36 @@ public class ClientConnection {
 	}
 
 	public void sendMessage(String message, DatagramSocket socket) {
-		
-		Random generator = new Random();
-    	double failure = generator.nextDouble();
-    	
-    	if (failure > TRANSMISSION_FAILURE_RATE){
-    		try {
-				socket.send(getDatagramToSend(message));
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+		for (int i = 0; i < 10; ++i) {
+			Random generator = new Random();
+			double failure = generator.nextDouble();
+
+			if (failure > TRANSMISSION_FAILURE_RATE) {
+				try {
+					socket.send(getDatagramToSend(message));
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			} else {
+				// Message got lost
 			}
-    	} else {
-    		// Message got lost
-    	}
-		
+		}
 	}
-	
+
 	private DatagramPacket getDatagramToSend(String message) {
 		String stringToSend = message;
 		byte[] bytedString = stringToSend.getBytes();
 		DatagramPacket packetToSend = new DatagramPacket(bytedString, bytedString.length, m_address, m_port);
 		return packetToSend;
 	}
-	
+
 	public boolean hasName(String testName) {
 		return testName.equals(m_name);
 	}
-	
-	public String getName(){
+
+	public String getName() {
 		return m_name;
 	}
-	
 
 }
