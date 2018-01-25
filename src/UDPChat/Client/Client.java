@@ -1,7 +1,6 @@
 package UDPChat.Client;
 
 import java.awt.event.*;
-//import java.io.*;
 
 public class Client implements ActionListener {
 
@@ -43,20 +42,13 @@ public class Client implements ActionListener {
 	}
 
 	private void listenForServerMessages() {
-		// Use the code below once m_connection.receiveChatMessage() has been
-		// implemented properly.
 		do {
 			m_GUI.displayMessage(m_connection.receiveChatMessage());
 		} while (true);
 	}
 
-	// Sole ActionListener method; acts as a callback from GUI when user hits
-	// enter in input field
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		// Since the only possible event is a carriage return in the text input
-		// field,
-		// the text in the chat input field can now be sent to the server.'
 		m_connection.sendChatMessage(m_name, m_GUI.getInput());
 		m_GUI.clearInput();
 	}

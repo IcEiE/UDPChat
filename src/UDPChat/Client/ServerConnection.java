@@ -11,6 +11,7 @@ import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.Random;
+import Commons.*;
 
 /**
  *
@@ -25,6 +26,7 @@ public class ServerConnection {
 	private InetAddress m_serverAddress = null;
 	private int m_serverPort = -1;
 	int messageID = 0;
+	private MessageHandler messageHandler = new MessageHandler();
 
 	public ServerConnection(String hostName, int port) {
 		m_serverPort = port;
@@ -55,7 +57,7 @@ public class ServerConnection {
 	}
 
 	public boolean handshake(String name) {
-		String message = "/connect";
+		String message = "/connect ";
 		sendChatMessage(name, message);
 		receiveChatMessage();
 		return true;
@@ -63,13 +65,27 @@ public class ServerConnection {
 
 	public String receiveChatMessage() {
 		DatagramPacket d = getDatagramToReceive();
-		try {
-			m_socket.receive(d);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		do {
+			try {
+				m_socket.receive(d);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		} while (OldMessageReceived(new String(d.getData())));
 		return new String(d.getData());
+	}
+
+	private boolean OldMessageReceived(String message) {
+
+		String arr[] = message.split("\\s+");
+		String clientWhoSent = arr[0].trim();
+		int packetID = Integer.parseInt(arr[1].trim());
+		if (messageHandler.messageAlreadyReceived(clientWhoSent, packetID)) {
+			return true;
+		}
+		messageHandler.markPacketAsReceived(clientWhoSent, packetID);
+		return false;
 	}
 
 	public void sendChatMessage(String name, String message) {
