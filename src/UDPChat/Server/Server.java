@@ -22,10 +22,11 @@ public class Server {
 	private DatagramSocket m_socket;
 	private PacketHandler packetHandler = new PacketHandler();
 	private int serverMessageID = 0;
+	private boolean socketTimedOut;
 
 	public static void main(String[] args) {
 		controlSizeOfInputString(args);
-		Server instance = createServerInstance(args);
+		Server instance = createServerInstance(args[0]);
 		instance.listenForClientMessages();
 	}
 
@@ -35,10 +36,16 @@ public class Server {
 
 	private void listenForClientMessages() {
 		System.out.println("Waiting for client messages... ");
-		int numbOfMessenges = 0;
+		int checkCount = 0;
 		do {
+			socketTimedOut = false;
 			DatagramPacket msgPacket = getPacketMessage(m_socket);
-			executeMessage(msgPacket);
+			if (socketTimedOut && m_connectedClients.size() > 0) {
+				checkClients(checkCount);
+				++checkCount;
+			} else if (!socketTimedOut){
+				executeMessage(msgPacket);
+			}
 
 		} while (true);
 	}
@@ -49,6 +56,9 @@ public class Server {
 		String type = arr[2].trim();
 		String clientWhoSent = arr[0].trim();
 		int messageID = Integer.parseInt(arr[1]);
+
+		setClientAsActive(clientWhoSent);
+
 		if (packetHandler.isANewMessage(clientWhoSent, messageID)) {
 			switch (type) {
 			case "/connect":
@@ -56,15 +66,17 @@ public class Server {
 					broadcast(clientWhoSent + " " + messageID + " " + clientWhoSent + " has connected!");
 				}
 				break;
-			case "/dc":
+			case "/leave":
 				if (removeClientFromServer(clientWhoSent)) {
-					broadcast(clientWhoSent + " " + messageID + " " + clientWhoSent + " has disconnected from the server!");
+					broadcast(clientWhoSent + " " + messageID + " " + clientWhoSent
+							+ " has left the server!");
 				}
 				break;
 			case "/tell":
 				String splitForClientToSend[] = arr[3].split("\\s+", 2);
 				String clientToSend = splitForClientToSend[0].trim();
-				message = clientWhoSent + " " + messageID + " " + clientWhoSent + " to " + clientToSend + ": " + splitForClientToSend[1];
+				message = clientWhoSent + " " + messageID + " " + clientWhoSent + " to " + clientToSend + ": "
+						+ splitForClientToSend[1];
 				if (clientIsConnected(clientWhoSent) && clientIsConnected(clientToSend)) {
 					sendPrivateMessage(message, clientToSend);
 					sendPrivateMessage(message, clientWhoSent);
@@ -84,30 +96,10 @@ public class Server {
 					}
 					sendPrivateMessage(newMessage, clientWhoSent);
 				}
+				break;
 			}
 			packetHandler.markPacketAsReceived(clientWhoSent, messageID);
 		}
-	}
-
-	private boolean removeClientFromServer(String name) {
-		for (ClientConnection cc : m_connectedClients) {
-			if (name.equals(cc.getName())) {
-				m_connectedClients.remove(m_connectedClients.indexOf(cc));
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private boolean clientIsConnected(String name) {
-		ClientConnection c;
-		for (Iterator<ClientConnection> itr = m_connectedClients.iterator(); itr.hasNext();) {
-			c = itr.next();
-			if (c.hasName(name)) {
-				return true; // client exists in the server
-			}
-		}
-		return false;
 	}
 
 	public boolean addClient(String name, InetAddress address, int port) {
@@ -152,9 +144,9 @@ public class Server {
 		}
 	}
 
-	private static Server createServerInstance(String[] args) {
+	private static Server createServerInstance(String port) {
 		try {
-			Server instance = new Server(Integer.parseInt(args[0]));
+			Server instance = new Server(Integer.parseInt(port));
 			return instance;
 		} catch (NumberFormatException e) {
 			System.err.println("Error: port number must be an integer.");
@@ -166,6 +158,7 @@ public class Server {
 	private DatagramSocket createDatagramSocket(int port) {
 		try {
 			DatagramSocket socket = new DatagramSocket(port);
+			socket.setSoTimeout(300);
 			return socket;
 		} catch (SocketException e) {
 			// TODO Auto-generated catch block
@@ -178,6 +171,9 @@ public class Server {
 		DatagramPacket incoming = getDatagramToReceive();
 		try {
 			socket.receive(incoming);
+		} catch (SocketTimeoutException e) {
+			socketTimedOut = true;
+			return null;
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -186,9 +182,80 @@ public class Server {
 	}
 
 	private DatagramPacket getDatagramToReceive() {
-		byte[] buffer = new byte[1000];
+		byte[] buffer = new byte[1024];
 		DatagramPacket receiveablePacket = new DatagramPacket(buffer, buffer.length);
 		return receiveablePacket;
+	}
+
+	private void checkClients(int currentLoop) {
+		if (currentLoop % 5 == 0) {
+			removeInactiveClients();
+			setClientsAsInactive();
+		}
+		sendMessageToInactiveClient();
+	}
+
+	private void setClientsAsInactive() {
+		for (ClientConnection cc : m_connectedClients) {
+			cc.resetActive();
+		}
+	}
+
+	private void setClientAsActive(String name) {
+		for (ClientConnection cc : m_connectedClients) {
+			if (cc.hasName(name)) {
+				cc.clientIsActive();
+			}
+		}
+	}
+
+	
+	private void sendMessageToInactiveClient() {
+		for (ClientConnection cc : m_connectedClients) {
+			if (!cc.isActive()) {
+				sendPrivateMessage("Server" + " " + serverMessageID + " " + "/CC respond to continiue being connected!", cc.getName());
+			}
+		}
+		++serverMessageID;
+	}
+	
+	private void removeInactiveClients() {
+		int index = 0;
+		ClientConnection cc;
+		while(index < m_connectedClients.size()) {
+			cc = m_connectedClients.get(index);
+			if(!cc.isActive()) {
+				if (removeClientFromServer(cc.getName())) {
+					broadcast("Sever" + " " + serverMessageID + " " + cc.getName() + " has disconnected from the server!");
+					++serverMessageID;
+				}
+			}
+			else {
+				++index;
+			}
+		}
+	}
+	
+	private boolean removeClientFromServer(String name) {
+		for (ClientConnection cc : m_connectedClients) {
+			if (name.equals(cc.getName())) {
+				m_connectedClients.remove(m_connectedClients.indexOf(cc));
+				packetHandler.removeClient(name);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private boolean clientIsConnected(String name) {
+		ClientConnection c;
+		for (Iterator<ClientConnection> itr = m_connectedClients.iterator(); itr.hasNext();) {
+			c = itr.next();
+			if (c.hasName(name)) {
+				return true; // client exists in the server
+			}
+		}
+		return false;
 	}
 
 }

@@ -26,7 +26,6 @@ public class Client implements ActionListener {
 
 	private Client(String userName) {
 		m_name = userName;
-
 		// Start up GUI (runs in its own thread)
 		m_GUI = new ChatGUI(this, m_name);
 	}
@@ -35,7 +34,6 @@ public class Client implements ActionListener {
 		// Create a new server connection
 		m_connection = new ServerConnection(hostName, port);
 		if (m_connection.handshake(m_name)) {
-			m_GUI.displayMessage("You are now connected!");
 			listenForServerMessages();
 		} else {
 			System.err.println("Unable to connect to server");
@@ -43,10 +41,8 @@ public class Client implements ActionListener {
 	}
 
 	private void listenForServerMessages() {
-		// Use the code below once m_connection.receiveChatMessage() has been
-		// implemented properly.
 		do {
-			m_GUI.displayMessage(m_connection.receiveChatMessage());
+			m_GUI.displayMessage(m_connection.receiveChatMessage(m_name));
 		} while (true);
 	}
 

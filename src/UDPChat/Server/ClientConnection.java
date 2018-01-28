@@ -22,6 +22,7 @@ public class ClientConnection {
 	private final String m_name;
 	private final InetAddress m_address;
 	private final int m_port;
+	private boolean isActive = isActive = true;
 
 	public ClientConnection(String name, InetAddress address, int port) {
 		m_name = name;
@@ -44,7 +45,6 @@ public class ClientConnection {
 				}
 			}
 		}
-
 	}
 
 	private DatagramPacket getDatagramToSend(String message) {
@@ -60,6 +60,18 @@ public class ClientConnection {
 
 	public String getName() {
 		return m_name;
+	}
+	
+	public void resetActive() {
+		isActive = false;
+	}
+	
+	public void clientIsActive() {
+		isActive = true;
+	}
+	
+	public boolean isActive(){
+		return isActive;
 	}
 
 }

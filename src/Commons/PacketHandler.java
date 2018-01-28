@@ -1,4 +1,8 @@
 package Commons;
+/*
+ * Class used to control packets received by a server or a client. It is used to determining if a packet has been taken before or not, to not work on a identical packet.
+ * This is done with a help of a hashmap name = key, contain each PacketID from that client.
+ */
 
 import java.util.ArrayList;
 import java.util.HashMap;

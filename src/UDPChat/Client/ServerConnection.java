@@ -38,27 +38,52 @@ public class ServerConnection {
 	public boolean handshake(String name) {
 		String message = "/connect";
 		sendChatMessage(name, message);
-		System.out.println(receiveChatMessage());
 		return true;
 	}
-
-	public String receiveChatMessage() {
-		DatagramPacket d = getDatagramToReceive();
+/*
+ * Method used to receive a message. If the message is recognized as a new Packet then it will be processed. 
+ * When a new packet has been received, it determines if it belong to a specific type and from that data operate. 
+ */
+	public String receiveChatMessage(String name) {
+		DatagramPacket d;;
 		String arr[];
 		do {
-			try {
-				m_socket.receive(d);
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			String message = new String(d.getData());
-			System.out.println(message);
-			arr = message.split("\\s+", 3);
+			String message;
+			do {
+				d = getDatagramToReceive();
+				try {
+					m_socket.receive(d);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				message = new String(d.getData());
 
-		} while (!packetHandler.isANewMessage(arr[0], Integer.parseInt(arr[1])));
-		packetHandler.markPacketAsReceived(arr[0], Integer.parseInt(arr[1]));
-		return arr[2];
+				arr = message.split("\\s+", 3);
+
+			} while (!packetHandler.isANewMessage(arr[0], Integer.parseInt(arr[1])));
+			
+
+			String[] typeSplit = arr[2].split("\\s+", 2);
+			String type = typeSplit[0].trim();
+			System.out.println(message);
+			
+			switch(type) {
+			
+			//Sends a response to the server for it to know that this client is stil present.
+			case "/CC":
+				sendChatMessage(name, "present");
+				packetHandler.markPacketAsReceived(arr[0], Integer.parseInt(arr[1]));
+				break;
+			//If someone has disconnected that that client(key) shall be removed from the hashmap in packetHandler.
+			case "/dc":
+				packetHandler.removeClient(arr[0]);
+				return typeSplit[1].trim();
+			default:
+				packetHandler.markPacketAsReceived(arr[0], Integer.parseInt(arr[1]));
+				return arr[2].trim();
+			}
+		} while (true);
 	}
 
 	public void sendChatMessage(String name, String message) {
@@ -116,7 +141,7 @@ public class ServerConnection {
 	}
 
 	private DatagramPacket getDatagramToReceive() {
-		byte[] buffer = new byte[1000];
+		byte[] buffer = new byte[1024];
 		DatagramPacket receiveablePacket = new DatagramPacket(buffer, buffer.length);
 		return receiveablePacket;
 	}
