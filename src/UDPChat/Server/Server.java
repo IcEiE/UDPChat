@@ -14,10 +14,14 @@ import java.net.*;
 import java.util.ArrayList;
 import java.util.Iterator;
 
+import Commons.PacketHandler;
+
 public class Server {
 
 	private ArrayList<ClientConnection> m_connectedClients = new ArrayList<ClientConnection>();
 	private DatagramSocket m_socket;
+	private PacketHandler packetHandler = new PacketHandler();
+	private int serverMessageID = 0;
 
 	public static void main(String[] args) {
 		controlSizeOfInputString(args);
@@ -25,37 +29,8 @@ public class Server {
 		instance.listenForClientMessages();
 	}
 
-	private static void controlSizeOfInputString(String[] args) {
-		if (args.length < 1) {
-			System.err.println("Usage: java Server portnumber");
-			System.exit(-1);
-		}
-	}
-
-	private static Server createServerInstance(String[] args) {
-		try {
-			Server instance = new Server(Integer.parseInt(args[0]));
-			return instance;
-		} catch (NumberFormatException e) {
-			System.err.println("Error: port number must be an integer.");
-			System.exit(-1);
-		}
-		return null;
-	}
-
 	private Server(int portNumber) {
 		m_socket = createDatagramSocket(portNumber);
-	}
-
-	private DatagramSocket createDatagramSocket(int port) {
-		try {
-			DatagramSocket socket = new DatagramSocket(port);
-			return socket;
-		} catch (SocketException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		return null;
 	}
 
 	private void listenForClientMessages() {
@@ -64,68 +39,53 @@ public class Server {
 		do {
 			DatagramPacket msgPacket = getPacketMessage(m_socket);
 			executeMessage(msgPacket);
-			++numbOfMessenges;
-			System.out.println("Finished Messages: " + numbOfMessenges);
 
 		} while (true);
 	}
 
-	private DatagramPacket getPacketMessage(DatagramSocket socket) {
-		DatagramPacket incoming = getDatagramToReceive();
-		try {
-			socket.receive(incoming);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		return incoming;
-	}
-
-	private DatagramPacket getDatagramToReceive() {
-		byte[] buffer = new byte[1000];
-		DatagramPacket receiveablePacket = new DatagramPacket(buffer, buffer.length);
-		return receiveablePacket;
-	}
-
 	private void executeMessage(DatagramPacket p) {
 		String message = new String(p.getData());
-		String arr[] = message.split("\\s+");
-		String type = arr[1].trim();
+		String arr[] = message.split("\\s+", 4);
+		String type = arr[2].trim();
 		String clientWhoSent = arr[0].trim();
-
-		switch (type) {
-		case "/connect":
-			if (addClient(clientWhoSent, p.getAddress(), p.getPort())) {
-				broadcast(clientWhoSent + " has connected!");
-			}
-			break;
-		case "/dc":
-			if (removeClientFromServer(clientWhoSent)) {
-				broadcast(clientWhoSent + " has disconnected from the server!");
-			}
-			break;
-		case "/tell":
-			String clientToSend = arr[2].trim();
-			message = trimMessageToSend(message, 3, clientWhoSent, clientToSend);
-			if (clientIsConnected(clientWhoSent) && clientIsConnected(clientToSend)) {
-				sendPrivateMessage(message, arr[0]);
-				sendPrivateMessage(message, arr[2]);
-			}
-			break;
-		case "/all":
-			if (clientIsConnected(clientWhoSent)) {
-				message = trimMessageToSend(message, 2, clientWhoSent, "all");
-				broadcast(message);
-			}
-			break;
-		case "/list":
-			if (clientIsConnected(clientWhoSent)) {
-				String newMessage = "Connected Clients: ";
-				for (ClientConnection cc : m_connectedClients) {
-					newMessage += cc.getName() + ", ";
+		int messageID = Integer.parseInt(arr[1]);
+		if (packetHandler.isANewMessage(clientWhoSent, messageID)) {
+			switch (type) {
+			case "/connect":
+				if (addClient(clientWhoSent, p.getAddress(), p.getPort())) {
+					broadcast(clientWhoSent + " " + messageID + " " + clientWhoSent + " has connected!");
 				}
-				sendPrivateMessage(newMessage, clientWhoSent);
+				break;
+			case "/dc":
+				if (removeClientFromServer(clientWhoSent)) {
+					broadcast(clientWhoSent + " " + messageID + " " + clientWhoSent + " has disconnected from the server!");
+				}
+				break;
+			case "/tell":
+				String splitForClientToSend[] = arr[3].split("\\s+", 2);
+				String clientToSend = splitForClientToSend[0].trim();
+				message = clientWhoSent + " " + messageID + " " + clientWhoSent + " to " + clientToSend + ": " + splitForClientToSend[1];
+				if (clientIsConnected(clientWhoSent) && clientIsConnected(clientToSend)) {
+					sendPrivateMessage(message, clientToSend);
+					sendPrivateMessage(message, clientWhoSent);
+				}
+				break;
+			case "/all":
+				if (clientIsConnected(clientWhoSent)) {
+					message = clientWhoSent + " " + messageID + " " + clientWhoSent + " to " + "all" + ": " + arr[3];
+					broadcast(message);
+				}
+				break;
+			case "/list":
+				if (clientIsConnected(clientWhoSent)) {
+					String newMessage = clientWhoSent + " " + messageID + " " + "Connected Clients: ";
+					for (ClientConnection cc : m_connectedClients) {
+						newMessage += cc.getName() + ", ";
+					}
+					sendPrivateMessage(newMessage, clientWhoSent);
+				}
 			}
+			packetHandler.markPacketAsReceived(clientWhoSent, messageID);
 		}
 	}
 
@@ -137,15 +97,6 @@ public class Server {
 			}
 		}
 		return false;
-	}
-
-	private String trimMessageToSend(String message, int indexStart, String sender, String receiver) {
-		String arr[] = message.split("\\s+");
-		String newMessage = sender + " to " + receiver + ": ";
-		for (int i = indexStart; i < arr.length; ++i) {
-			newMessage += arr[i] + " ";
-		}
-		return newMessage;
 	}
 
 	private boolean clientIsConnected(String name) {
@@ -186,4 +137,58 @@ public class Server {
 			itr.next().sendMessage(message, m_socket);
 		}
 	}
+
+	/*
+	 * -----------------------------------------------------------------------------
+	 * Private functions used by the different public methods that enable the
+	 * functionality of the program
+	 * -----------------------------------------------------------------------------
+	 */
+
+	private static void controlSizeOfInputString(String[] args) {
+		if (args.length < 1) {
+			System.err.println("Usage: java Server portnumber");
+			System.exit(-1);
+		}
+	}
+
+	private static Server createServerInstance(String[] args) {
+		try {
+			Server instance = new Server(Integer.parseInt(args[0]));
+			return instance;
+		} catch (NumberFormatException e) {
+			System.err.println("Error: port number must be an integer.");
+			System.exit(-1);
+		}
+		return null;
+	}
+
+	private DatagramSocket createDatagramSocket(int port) {
+		try {
+			DatagramSocket socket = new DatagramSocket(port);
+			return socket;
+		} catch (SocketException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	private DatagramPacket getPacketMessage(DatagramSocket socket) {
+		DatagramPacket incoming = getDatagramToReceive();
+		try {
+			socket.receive(incoming);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return incoming;
+	}
+
+	private DatagramPacket getDatagramToReceive() {
+		byte[] buffer = new byte[1000];
+		DatagramPacket receiveablePacket = new DatagramPacket(buffer, buffer.length);
+		return receiveablePacket;
+	}
+
 }

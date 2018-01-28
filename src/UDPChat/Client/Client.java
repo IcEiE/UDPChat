@@ -35,7 +35,7 @@ public class Client implements ActionListener {
 		// Create a new server connection
 		m_connection = new ServerConnection(hostName, port);
 		if (m_connection.handshake(m_name)) {
-			m_GUI.displayMessage("You are now connected");
+			m_GUI.displayMessage("You are now connected!");
 			listenForServerMessages();
 		} else {
 			System.err.println("Unable to connect to server");
@@ -58,11 +58,7 @@ public class Client implements ActionListener {
 		// field,
 		// the text in the chat input field can now be sent to the server.'
 		String writtenMessage = m_GUI.getInput();
-		if (writtenMessage.trim().equals("/connect")) {
-			m_connection.handshake(m_name);
-		} else {
-			m_connection.sendChatMessage(m_name, writtenMessage);
-			m_GUI.clearInput();
-		}
+		m_connection.sendChatMessage(m_name, writtenMessage);
+		m_GUI.clearInput();
 	}
 }
